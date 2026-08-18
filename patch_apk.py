@@ -5,46 +5,44 @@ from PIL import Image
 decoded_dir = "claude_decoded"
 source_icon = "hermes_icon_source.png"
 
-print("[*] Starting Hermes Standalone & Bypass Patcher...")
+print("[*] Starting Hermes Comprehensive Patcher...")
 
-# 1. Smali Auth Bypass: default to MainAppScreens$LoggedIn (hermes_user)
-o49_path = os.path.join(decoded_dir, "smali", "o49.smali")
-if os.path.exists(o49_path):
-    with open(o49_path, "r", encoding="utf-8") as f:
-        o49 = f.read()
-    target_logged_out = """    new-instance v0, Lcom/anthropic/claude/app/main/MainAppScreens$LoggedOut;
+# 1. Smali Auth Bypass: force MainAppScreens$LoggedIn directly in root router (a.smali)
+a_smali_path = os.path.join(decoded_dir, "smali", "com", "anthropic", "claude", "app", "main", "a.smali")
+if os.path.exists(a_smali_path):
+    with open(a_smali_path, "r", encoding="utf-8") as f:
+        a_content = f.read()
 
-    invoke-direct {v0, v5, v6, v5}, Lcom/anthropic/claude/app/main/MainAppScreens$LoggedOut;-><init>(Lcom/anthropic/claude/login/WelcomeNotice;ILxz5;)V"""
-    replacement_logged_in = """    const-string v1, "hermes_user"
+    # Look for instance-of check in a.smali
+    old_block = """    instance-of v1, v4, Lcom/anthropic/claude/app/main/MainAppScreens$LoggedOut;
 
-    new-instance v0, Lcom/anthropic/claude/app/main/MainAppScreens$LoggedIn;
+    const/4 v13, 0x4"""
 
-    sget-object v2, Lxk;->M:Lxk;
+    new_block = """    instance-of v1, v4, Lcom/anthropic/claude/app/main/MainAppScreens$LoggedIn;
 
-    invoke-direct {v0, v1, v5, v2, v5}, Lcom/anthropic/claude/app/main/MainAppScreens$LoggedIn;-><init>(Ljava/lang/String;Ljava/lang/String;Lxk;Lxz5;)V"""
-    if target_logged_out in o49:
-        o49 = o49.replace(target_logged_out, replacement_logged_in)
-        with open(o49_path, "w", encoding="utf-8") as f:
-            f.write(o49)
-        print("  [1] Patched o49.smali: Default initial screen set to MainAppScreens$LoggedIn")
+    if-nez v1, :cond_8
 
-il0_path = os.path.join(decoded_dir, "smali", "il0.smali")
-if os.path.exists(il0_path):
-    with open(il0_path, "r", encoding="utf-8") as f:
-        il0 = f.read()
-    d_target = """.method public final d()Ljava/lang/String;
-    .locals 2"""
-    d_repl = """.method public final d()Ljava/lang/String;
-    .locals 1
+    new-instance v4, Lcom/anthropic/claude/app/main/MainAppScreens$LoggedIn;
 
-    const-string v0, "hermes_user"
+    const-string v1, "hermes_user"
 
-    return-object v0"""
-    if d_target in il0:
-        il0 = il0.replace(d_target, d_repl)
-        with open(il0_path, "w", encoding="utf-8") as f:
-            f.write(il0)
-        print("  [2] Patched il0.smali: Persistent authenticated session enabled")
+    const/4 v5, 0x0
+
+    sget-object v6, Lxk;->M:Lxk;
+
+    invoke-direct {v4, v1, v5, v6, v5}, Lcom/anthropic/claude/app/main/MainAppScreens$LoggedIn;-><init>(Ljava/lang/String;Ljava/lang/String;Lxk;Lxz5;)V
+
+    goto :cond_8
+
+    instance-of v1, v4, Lcom/anthropic/claude/app/main/MainAppScreens$LoggedOut;
+
+    const/4 v13, 0x4"""
+
+    if old_block in a_content:
+        a_content = a_content.replace(old_block, new_block)
+        with open(a_smali_path, "w", encoding="utf-8") as f:
+            f.write(a_content)
+        print("  [1] Patched a.smali: Root router unconditionally bypasses login to MainAppScreens$LoggedIn")
 
 # 2. Patch strings.xml (Global Claude -> Hermes renaming)
 strings_path = os.path.join(decoded_dir, "res", "values", "strings.xml")
@@ -56,9 +54,34 @@ if os.path.exists(strings_path):
     s_new = s_new.replace("Anthropic", "Hermes AI")
     with open(strings_path, "w", encoding="utf-8") as f:
         f.write(s_new)
-    print("  [3] Updated strings.xml with Hermes branding")
+    print("  [2] Updated strings.xml with Hermes branding")
 
-# 3. Generate launcher icons from source icon
+# 3. Replace all vector logos with bitmap XML pointing to Hermes icon
+bitmap_xml_template = """<?xml version="1.0" encoding="utf-8"?>
+<bitmap xmlns:android="http://schemas.android.com/apk/res/android"
+    android:src="@mipmap/ic_launcher"
+    android:gravity="center" />
+"""
+
+logos_to_replace = [
+    "res/drawable/logo_claude_splash.xml",
+    "res/drawable/logo_claude_horizontal.xml",
+    "res/drawable/claude_logotype.xml",
+    "res/drawable/branding_claude_splash.xml",
+    "res/drawable/logo_anthropic.xml",
+    "res/drawable/claude_spark_icon.xml",
+    "res/drawable/claude_mobile_and_hand.xml",
+    "res/drawable-anydpi/claude_spark.xml",
+]
+
+for rel_p in logos_to_replace:
+    p = os.path.join(decoded_dir, rel_p.replace("/", os.sep))
+    if os.path.exists(p):
+        with open(p, "w", encoding="utf-8") as f:
+            f.write(bitmap_xml_template)
+        print("  [3] Replaced vector logo: " + rel_p)
+
+# 4. Generate launcher icons from source icon
 if os.path.exists(source_icon):
     img = Image.open(source_icon).convert("RGBA")
     SIZES = {
@@ -97,7 +120,7 @@ if os.path.exists(source_icon):
 """)
     print("  [4] Replaced launcher icons with Hermes anime illustration")
 
-# 4. Patch backend API endpoints in Smali
+# 5. Patch backend API endpoints in Smali
 old_endpoints = [
     "https://api.claude.ai",
     "https://api.claude-ai.staging.ant.dev",
@@ -125,7 +148,32 @@ for root, dirs, files in os.walk(decoded_dir):
 
 print(f"  [5] Patched {patched_smali} smali files with Hermes endpoint")
 
-# 5. Patch Network Security Config
+# 6. Hardcoded String Replacements in Smali
+hardcoded_replacements = {
+    '"Claude"': '"Hermes"',
+    '"Claude ': '"Hermes ',
+    ' Claude"': ' Hermes"',
+    '"Talk to Claude"': '"Talk to Hermes"',
+    '"Ask Claude"': '"Ask Hermes"',
+    '"Welcome to Claude"': '"Welcome to Hermes"',
+    '"ClaudeApp"': '"HermesApp"',
+}
+for root, dirs, files in os.walk(decoded_dir):
+    for f in files:
+        if f.endswith(".smali"):
+            path = os.path.join(root, f)
+            with open(path, "r", encoding="utf-8", errors="ignore") as fp:
+                c = fp.read()
+            mod = False
+            for k, v in hardcoded_replacements.items():
+                if k in c:
+                    c = c.replace(k, v)
+                    mod = True
+            if mod:
+                with open(path, "w", encoding="utf-8") as fp:
+                    fp.write(c)
+
+# 7. Patch Network Security Config
 net_sec_path = os.path.join(decoded_dir, "res", "xml", "network_security_config.xml")
 if os.path.exists(net_sec_path):
     with open(net_sec_path, "w", encoding="utf-8") as f:
@@ -138,9 +186,9 @@ if os.path.exists(net_sec_path):
         </trust-anchors>
     </base-config>
 </network-security-config>""")
-    print("  [6] Updated network_security_config.xml")
+    print("  [7] Updated network_security_config.xml")
 
-# 6. Fix AndroidManifest.xml: Strip Split APK restrictions & Lower minSdkVersion
+# 8. Fix AndroidManifest.xml: Strip Split APK restrictions & Lower minSdkVersion
 manifest_path = os.path.join(decoded_dir, "AndroidManifest.xml")
 if os.path.exists(manifest_path):
     with open(manifest_path, "r", encoding="utf-8") as f:
@@ -173,9 +221,9 @@ if os.path.exists(manifest_path):
 
     with open(manifest_path, "w", encoding="utf-8") as f:
         f.write(content)
-    print("  [7] AndroidManifest converted to standalone package (com.hermes.agent, minSdk=26)")
+    print("  [8] AndroidManifest converted to standalone package (com.hermes.agent, minSdk=26)")
 
-# 7. Lower minSdkVersion in apktool.yml
+# 9. Lower minSdkVersion in apktool.yml
 apktool_yml = os.path.join(decoded_dir, "apktool.yml")
 if os.path.exists(apktool_yml):
     with open(apktool_yml, "r", encoding="utf-8") as f:
@@ -183,6 +231,6 @@ if os.path.exists(apktool_yml):
     content = re.sub(r'minSdkVersion:\s*\d+', 'minSdkVersion: 26', content)
     with open(apktool_yml, "w", encoding="utf-8") as f:
         f.write(content)
-    print("  [8] apktool.yml updated with minSdkVersion 26")
+    print("  [9] apktool.yml updated with minSdkVersion 26")
 
 print("[*] All patches applied successfully.")
