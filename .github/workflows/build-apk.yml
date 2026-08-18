@@ -26,10 +26,9 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-          cache: 'pip'
 
       - name: Install Python dependencies
-        run: pip install Pillow
+        run: pip install -r requirements.txt
 
       - name: Set up Android SDK Tools
         uses: android-actions/setup-android@v3
@@ -54,37 +53,14 @@ jobs:
 
       - name: Zipalign & Sign APK
         run: |
-          # 1. Zipalign
           zipalign -v -p 4 hermes_unsigned.apk hermes_aligned.apk
-
-          # 2. Generate debug keystore
           keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
-
-          # 3. Sign APK
           apksigner sign --ks debug.keystore --ks-pass pass:android --ks-key-alias androiddebugkey --key-pass pass:android --out Hermes.apk hermes_aligned.apk
-
-          # 4. Verify signature
           apksigner verify -v Hermes.apk
 
-      - name: Upload Signed Hermes APK as Artifact
+      - name: Upload Signed Hermes APK
         uses: actions/upload-artifact@v4
         with:
           name: Hermes-Patched-APK
           path: Hermes.apk
           retention-days: 30
-
-      - name: Create GitHub Release on Tags
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: Hermes.apk
-          name: Hermes APK ${{ github.ref_name }}
-          body: |
-            ## Hermes Android Release ${{ github.ref_name }}
-            
-            Original Claude.apk interface, animations, and design preserved with:
-            - **Backend**: `https://jishnupg-opencode-cli.hf.space/hermes/v1`
-            - **App Name**: `Hermes`
-            - **App Icon**: Custom Anime Girl Artwork
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
