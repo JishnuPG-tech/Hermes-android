@@ -5,19 +5,60 @@ from PIL import Image
 decoded_dir = "claude_decoded"
 source_icon = "hermes_icon_source.png"
 
-print("[*] Starting Hermes APK Patcher...")
+print("[*] Starting Hermes Standalone & Bypass Patcher...")
 
-# 1. Patch app_name in strings.xml
+# 1. Smali Auth Bypass: default to MainAppScreens$LoggedIn (hermes_user)
+o49_path = os.path.join(decoded_dir, "smali", "o49.smali")
+if os.path.exists(o49_path):
+    with open(o49_path, "r", encoding="utf-8") as f:
+        o49 = f.read()
+    target_logged_out = """    new-instance v0, Lcom/anthropic/claude/app/main/MainAppScreens$LoggedOut;
+
+    invoke-direct {v0, v5, v6, v5}, Lcom/anthropic/claude/app/main/MainAppScreens$LoggedOut;-><init>(Lcom/anthropic/claude/login/WelcomeNotice;ILxz5;)V"""
+    replacement_logged_in = """    const-string v1, "hermes_user"
+
+    new-instance v0, Lcom/anthropic/claude/app/main/MainAppScreens$LoggedIn;
+
+    sget-object v2, Lxk;->M:Lxk;
+
+    invoke-direct {v0, v1, v5, v2, v5}, Lcom/anthropic/claude/app/main/MainAppScreens$LoggedIn;-><init>(Ljava/lang/String;Ljava/lang/String;Lxk;Lxz5;)V"""
+    if target_logged_out in o49:
+        o49 = o49.replace(target_logged_out, replacement_logged_in)
+        with open(o49_path, "w", encoding="utf-8") as f:
+            f.write(o49)
+        print("  [1] Patched o49.smali: Default initial screen set to MainAppScreens$LoggedIn")
+
+il0_path = os.path.join(decoded_dir, "smali", "il0.smali")
+if os.path.exists(il0_path):
+    with open(il0_path, "r", encoding="utf-8") as f:
+        il0 = f.read()
+    d_target = """.method public final d()Ljava/lang/String;
+    .locals 2"""
+    d_repl = """.method public final d()Ljava/lang/String;
+    .locals 1
+
+    const-string v0, "hermes_user"
+
+    return-object v0"""
+    if d_target in il0:
+        il0 = il0.replace(d_target, d_repl)
+        with open(il0_path, "w", encoding="utf-8") as f:
+            f.write(il0)
+        print("  [2] Patched il0.smali: Persistent authenticated session enabled")
+
+# 2. Patch strings.xml (Global Claude -> Hermes renaming)
 strings_path = os.path.join(decoded_dir, "res", "values", "strings.xml")
 if os.path.exists(strings_path):
     with open(strings_path, "r", encoding="utf-8") as f:
-        content = f.read()
-    new_content = re.sub(r'<string name="app_name">[^<]+</string>', '<string name="app_name">Hermes</string>', content)
+        s = f.read()
+    s_new = re.sub(r'>([^<]*)Claude([^<]*)<', r'>\1Hermes\2<', s)
+    s_new = re.sub(r'>([^<]*)Claude([^<]*)<', r'>\1Hermes\2<', s_new)
+    s_new = s_new.replace("Anthropic", "Hermes AI")
     with open(strings_path, "w", encoding="utf-8") as f:
-        f.write(new_content)
-    print("  [1] Updated app_name in strings.xml to 'Hermes'")
+        f.write(s_new)
+    print("  [3] Updated strings.xml with Hermes branding")
 
-# 2. Generate launcher icons from source icon
+# 3. Generate launcher icons from source icon
 if os.path.exists(source_icon):
     img = Image.open(source_icon).convert("RGBA")
     SIZES = {
@@ -54,9 +95,9 @@ if os.path.exists(source_icon):
     <foreground android:drawable="@mipmap/ic_launcher_foreground" />
 </adaptive-icon>
 """)
-    print("  [2] Replaced launcher icons with Hermes anime illustration")
+    print("  [4] Replaced launcher icons with Hermes anime illustration")
 
-# 3. Patch backend API endpoints in Smali
+# 4. Patch backend API endpoints in Smali
 old_endpoints = [
     "https://api.claude.ai",
     "https://api.claude-ai.staging.ant.dev",
@@ -82,9 +123,9 @@ for root, dirs, files in os.walk(decoded_dir):
                     fp.write(content)
                 patched_smali += 1
 
-print(f"  [3] Patched {patched_smali} smali files with Hermes endpoint")
+print(f"  [5] Patched {patched_smali} smali files with Hermes endpoint")
 
-# 4. Patch Network Security Config
+# 5. Patch Network Security Config
 net_sec_path = os.path.join(decoded_dir, "res", "xml", "network_security_config.xml")
 if os.path.exists(net_sec_path):
     with open(net_sec_path, "w", encoding="utf-8") as f:
@@ -97,9 +138,9 @@ if os.path.exists(net_sec_path):
         </trust-anchors>
     </base-config>
 </network-security-config>""")
-    print("  [4] Updated network_security_config.xml")
+    print("  [6] Updated network_security_config.xml")
 
-# 5. Fix AndroidManifest.xml: Strip Split APK restrictions & Lower minSdkVersion
+# 6. Fix AndroidManifest.xml: Strip Split APK restrictions & Lower minSdkVersion
 manifest_path = os.path.join(decoded_dir, "AndroidManifest.xml")
 if os.path.exists(manifest_path):
     with open(manifest_path, "r", encoding="utf-8") as f:
@@ -132,9 +173,9 @@ if os.path.exists(manifest_path):
 
     with open(manifest_path, "w", encoding="utf-8") as f:
         f.write(content)
-    print("  [5] AndroidManifest converted to standalone package (com.hermes.agent, minSdk=26)")
+    print("  [7] AndroidManifest converted to standalone package (com.hermes.agent, minSdk=26)")
 
-# 6. Lower minSdkVersion in apktool.yml
+# 7. Lower minSdkVersion in apktool.yml
 apktool_yml = os.path.join(decoded_dir, "apktool.yml")
 if os.path.exists(apktool_yml):
     with open(apktool_yml, "r", encoding="utf-8") as f:
@@ -142,6 +183,6 @@ if os.path.exists(apktool_yml):
     content = re.sub(r'minSdkVersion:\s*\d+', 'minSdkVersion: 26', content)
     with open(apktool_yml, "w", encoding="utf-8") as f:
         f.write(content)
-    print("  [6] apktool.yml updated with minSdkVersion 26")
+    print("  [8] apktool.yml updated with minSdkVersion 26")
 
-print("[*] All standalone patches applied successfully.")
+print("[*] All patches applied successfully.")
