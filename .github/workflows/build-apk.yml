@@ -1,0 +1,90 @@
+name: Build Patched Hermes APK
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Patch and Build Hermes APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install Python dependencies
+        run: pip install Pillow
+
+      - name: Set up Android SDK Tools
+        uses: android-actions/setup-android@v3
+
+      - name: Download Apktool v3.0.2
+        run: |
+          mkdir -p tools
+          curl -L -o tools/apktool.jar https://github.com/iBotPeaches/Apktool/releases/download/v3.0.2/apktool_3.0.2.jar
+          chmod +x tools/apktool.jar
+
+      - name: Decompile Claude APK
+        run: |
+          java -jar tools/apktool.jar d Claude.apk -o claude_decoded -f
+
+      - name: Apply Hermes Patches (Server URL, Icons, App Name)
+        run: |
+          python patch_apk.py
+
+      - name: Rebuild Patched APK with Apktool
+        run: |
+          java -jar tools/apktool.jar b claude_decoded -o hermes_unsigned.apk
+
+      - name: Zipalign & Sign APK
+        run: |
+          # 1. Zipalign
+          zipalign -v -p 4 hermes_unsigned.apk hermes_aligned.apk
+
+          # 2. Generate debug keystore
+          keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+
+          # 3. Sign APK
+          apksigner sign --ks debug.keystore --ks-pass pass:android --ks-key-alias androiddebugkey --key-pass pass:android --out Hermes.apk hermes_aligned.apk
+
+          # 4. Verify signature
+          apksigner verify -v Hermes.apk
+
+      - name: Upload Signed Hermes APK as Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Hermes-Patched-APK
+          path: Hermes.apk
+          retention-days: 30
+
+      - name: Create GitHub Release on Tags
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: Hermes.apk
+          name: Hermes APK ${{ github.ref_name }}
+          body: |
+            ## Hermes Android Release ${{ github.ref_name }}
+            
+            Original Claude.apk interface, animations, and design preserved with:
+            - **Backend**: `https://jishnupg-opencode-cli.hf.space/hermes/v1`
+            - **App Name**: `Hermes`
+            - **App Icon**: Custom Anime Girl Artwork
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
