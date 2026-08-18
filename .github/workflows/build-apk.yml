@@ -53,10 +53,21 @@ jobs:
 
       - name: Zipalign & Sign APK
         run: |
-          zipalign -v -p 4 hermes_unsigned.apk hermes_aligned.apk
+          # Find latest Android build-tools
+          BUILD_TOOLS=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -n 1)
+          echo "Using Android Build Tools at: $BUILD_TOOLS"
+
+          # 1. Zipalign
+          $BUILD_TOOLS/zipalign -v -p 4 hermes_unsigned.apk hermes_aligned.apk
+
+          # 2. Generate debug keystore
           keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
-          apksigner sign --ks debug.keystore --ks-pass pass:android --ks-key-alias androiddebugkey --key-pass pass:android --out Hermes.apk hermes_aligned.apk
-          apksigner verify -v Hermes.apk
+
+          # 3. Sign APK
+          $BUILD_TOOLS/apksigner sign --ks debug.keystore --ks-pass pass:android --ks-key-alias androiddebugkey --key-pass pass:android --out Hermes.apk hermes_aligned.apk
+
+          # 4. Verify signature
+          $BUILD_TOOLS/apksigner verify -v Hermes.apk
 
       - name: Upload Signed Hermes APK
         uses: actions/upload-artifact@v4
