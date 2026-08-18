@@ -7,42 +7,15 @@ source_icon = "hermes_icon_source.png"
 
 print("[*] Starting Hermes Comprehensive Patcher...")
 
-# 1. Smali Auth Bypass: force MainAppScreens$LoggedIn directly in root router (a.smali)
-a_smali_path = os.path.join(decoded_dir, "smali", "com", "anthropic", "claude", "app", "main", "a.smali")
-if os.path.exists(a_smali_path):
-    with open(a_smali_path, "r", encoding="utf-8") as f:
-        a_content = f.read()
-
-    # Look for instance-of check in a.smali
-    old_block = """    instance-of v1, v4, Lcom/anthropic/claude/app/main/MainAppScreens$LoggedOut;
-
-    const/4 v13, 0x4"""
-
-    new_block = """    instance-of v1, v4, Lcom/anthropic/claude/app/main/MainAppScreens$LoggedIn;
-
-    if-nez v1, :cond_8
-
-    new-instance v4, Lcom/anthropic/claude/app/main/MainAppScreens$LoggedIn;
-
-    const-string v1, "hermes_user"
-
-    const/4 v5, 0x0
-
-    sget-object v6, Lxk;->M:Lxk;
-
-    invoke-direct {v4, v1, v5, v6, v5}, Lcom/anthropic/claude/app/main/MainAppScreens$LoggedIn;-><init>(Ljava/lang/String;Ljava/lang/String;Lxk;Lxz5;)V
-
-    goto :cond_8
-
-    instance-of v1, v4, Lcom/anthropic/claude/app/main/MainAppScreens$LoggedOut;
-
-    const/4 v13, 0x4"""
-
-    if old_block in a_content:
-        a_content = a_content.replace(old_block, new_block)
-        with open(a_smali_path, "w", encoding="utf-8") as f:
-            f.write(a_content)
-        print("  [1] Patched a.smali: Root router unconditionally bypasses login to MainAppScreens$LoggedIn")
+# 1. Disable Sentry kill-switch in MainActivity.smali
+main_act_path = os.path.join(decoded_dir, "smali", "com", "anthropic", "claude", "mainactivity", "MainActivity.smali")
+if os.path.exists(main_act_path):
+    with open(main_act_path, "r", encoding="utf-8") as f:
+        main_act_content = f.read()
+    main_act_content = main_act_content.replace("if-nez v1, :cond_1", "goto :cond_1")
+    with open(main_act_path, "w", encoding="utf-8") as f:
+        f.write(main_act_content)
+    print("  [1] MainActivity.smali: Sentry kill-switch disabled")
 
 # 2. Patch strings.xml (Global Claude -> Hermes renaming)
 strings_path = os.path.join(decoded_dir, "res", "values", "strings.xml")
