@@ -1,5 +1,7 @@
 claude_decoded/
 tools/
-*.apk
 *.keystore
 .DS_Store
+hermes_unsigned.apk
+hermes_aligned.apk
+Hermes.apk
