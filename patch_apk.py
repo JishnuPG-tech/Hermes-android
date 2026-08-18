@@ -7,15 +7,28 @@ source_icon = "hermes_icon_source.png"
 
 print("[*] Starting Hermes Comprehensive Patcher...")
 
-# 1. Disable Sentry kill-switch in MainActivity.smali
+# 1. Disable all process kill-switches in MainActivity.smali & yz4.smali
 main_act_path = os.path.join(decoded_dir, "smali", "com", "anthropic", "claude", "mainactivity", "MainActivity.smali")
 if os.path.exists(main_act_path):
     with open(main_act_path, "r", encoding="utf-8") as f:
         main_act_content = f.read()
     main_act_content = main_act_content.replace("if-nez v1, :cond_1", "goto :cond_1")
+    main_act_content = main_act_content.replace("invoke-static {p0}, Landroid/os/Process;->killProcess(I)V", "# killProcess removed")
+    main_act_content = main_act_content.replace("invoke-virtual {p0}, Landroid/app/Activity;->finishAndRemoveTask()V", "# finishAndRemoveTask removed")
     with open(main_act_path, "w", encoding="utf-8") as f:
         f.write(main_act_content)
-    print("  [1] MainActivity.smali: Sentry kill-switch disabled")
+    print("  [1] MainActivity.smali: Sentry kill-switch disabled & finish neutralized")
+
+yz4_path = os.path.join(decoded_dir, "smali_classes3", "yz4.smali")
+if os.path.exists(yz4_path):
+    with open(yz4_path, "r", encoding="utf-8") as f:
+        yz4_content = f.read()
+    old_kill = "    invoke-static {v0}, Landroid/os/Process;->killProcess(I)V"
+    if old_kill in yz4_content:
+        yz4_content = yz4_content.replace(old_kill, "    # killProcess removed")
+        with open(yz4_path, "w", encoding="utf-8") as f:
+            f.write(yz4_content)
+        print("  [2] yz4.smali: API Base URL mismatch process kill neutralized")
 
 # 2. Patch strings.xml (Global Claude -> Hermes renaming)
 strings_path = os.path.join(decoded_dir, "res", "values", "strings.xml")
@@ -27,7 +40,7 @@ if os.path.exists(strings_path):
     s_new = s_new.replace("Anthropic", "Hermes AI")
     with open(strings_path, "w", encoding="utf-8") as f:
         f.write(s_new)
-    print("  [2] Updated strings.xml with Hermes branding")
+    print("  [3] Updated strings.xml with Hermes branding")
 
 # 3. Replace all vector logos with bitmap XML pointing to Hermes icon
 bitmap_xml_template = """<?xml version="1.0" encoding="utf-8"?>
@@ -52,7 +65,7 @@ for rel_p in logos_to_replace:
     if os.path.exists(p):
         with open(p, "w", encoding="utf-8") as f:
             f.write(bitmap_xml_template)
-        print("  [3] Replaced vector logo: " + rel_p)
+        print("  [4] Replaced vector logo: " + rel_p)
 
 # 4. Generate launcher icons from source icon
 if os.path.exists(source_icon):
@@ -91,7 +104,7 @@ if os.path.exists(source_icon):
     <foreground android:drawable="@mipmap/ic_launcher_foreground" />
 </adaptive-icon>
 """)
-    print("  [4] Replaced launcher icons with Hermes anime illustration")
+    print("  [5] Replaced launcher icons with Hermes anime illustration")
 
 # 5. Patch backend API endpoints in Smali
 old_endpoints = [
@@ -119,7 +132,7 @@ for root, dirs, files in os.walk(decoded_dir):
                     fp.write(content)
                 patched_smali += 1
 
-print(f"  [5] Patched {patched_smali} smali files with Hermes endpoint")
+print(f"  [6] Patched {patched_smali} smali files with Hermes endpoint")
 
 # 6. Hardcoded String Replacements in Smali
 hardcoded_replacements = {
