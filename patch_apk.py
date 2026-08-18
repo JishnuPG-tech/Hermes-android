@@ -82,7 +82,7 @@ for root, dirs, files in os.walk(decoded_dir):
                     fp.write(content)
                 patched_smali += 1
 
-print(f"  [3] Patched {patched_smali} smali files with Hermes endpoint: {new_endpoint}")
+print(f"  [3] Patched {patched_smali} smali files with Hermes endpoint")
 
 # 4. Patch Network Security Config
 net_sec_path = os.path.join(decoded_dir, "res", "xml", "network_security_config.xml")
@@ -99,4 +99,49 @@ if os.path.exists(net_sec_path):
 </network-security-config>""")
     print("  [4] Updated network_security_config.xml")
 
-print("[*] All patches successfully applied.")
+# 5. Fix AndroidManifest.xml: Strip Split APK restrictions & Lower minSdkVersion
+manifest_path = os.path.join(decoded_dir, "AndroidManifest.xml")
+if os.path.exists(manifest_path):
+    with open(manifest_path, "r", encoding="utf-8") as f:
+        content = f.read()
+
+    # Remove split attributes
+    content = re.sub(r'\s*android:requiredSplitTypes="[^"]*"', '', content)
+    content = re.sub(r'\s*android:splitTypes="[^"]*"', '', content)
+    content = re.sub(r'\s*android:isSplitRequired="[^"]*"', '', content)
+
+    # Remove Split APK meta-data
+    split_metadata_patterns = [
+        r'<meta-data\s+android:name="com\.android\.vending\.splits\.required"[^>]*/>\s*',
+        r'<meta-data\s+android:name="com\.android\.vending\.splits"[^>]*/>\s*',
+        r'<meta-data\s+android:name="com\.android\.vending\.derived\.apk\.id"[^>]*/>\s*',
+        r'<meta-data\s+android:name="com\.android\.stamp\.source"[^>]*/>\s*',
+        r'<meta-data\s+android:name="com\.android\.stamp\.type"[^>]*/>\s*'
+    ]
+    for p in split_metadata_patterns:
+        content = re.sub(p, '', content)
+
+    # Change package name to com.hermes.agent so it never conflicts with Play Store Claude
+    content = re.sub(r'package="com\.anthropic\.claude"', 'package="com.hermes.agent"', content)
+    content = content.replace('com.anthropic.claude.firebaseinitprovider', 'com.hermes.agent.firebaseinitprovider')
+    content = content.replace('com.anthropic.claude.provider.datadog.rum', 'com.hermes.agent.provider.datadog.rum')
+    content = content.replace('com.anthropic.claude.SentryNdkPreloadProvider', 'com.hermes.agent.SentryNdkPreloadProvider')
+
+    # Lower minSdkVersion to 26 (Android 8.0+)
+    content = re.sub(r'android:minSdkVersion="\d+"', 'android:minSdkVersion="26"', content)
+
+    with open(manifest_path, "w", encoding="utf-8") as f:
+        f.write(content)
+    print("  [5] AndroidManifest converted to standalone package (com.hermes.agent, minSdk=26)")
+
+# 6. Lower minSdkVersion in apktool.yml
+apktool_yml = os.path.join(decoded_dir, "apktool.yml")
+if os.path.exists(apktool_yml):
+    with open(apktool_yml, "r", encoding="utf-8") as f:
+        content = f.read()
+    content = re.sub(r'minSdkVersion:\s*\d+', 'minSdkVersion: 26', content)
+    with open(apktool_yml, "w", encoding="utf-8") as f:
+        f.write(content)
+    print("  [6] apktool.yml updated with minSdkVersion 26")
+
+print("[*] All standalone patches applied successfully.")
