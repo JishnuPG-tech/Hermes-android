@@ -36,16 +36,29 @@ for name, url in native_urls:
         print(f"  [!] Note fetching {name}: {e}")
 
 # 1. Disable all process kill-switches in MainActivity.smali & yz4.smali
-main_act_path = os.path.join(decoded_dir, "smali", "com", "anthropic", "claude", "mainactivity", "MainActivity.smali")
-if os.path.exists(main_act_path):
-    with open(main_act_path, "r", encoding="utf-8") as f:
-        main_act_content = f.read()
-    main_act_content = main_act_content.replace("if-nez v1, :cond_1", "goto :cond_1")
-    main_act_content = main_act_content.replace("invoke-static {p0}, Landroid/os/Process;->killProcess(I)V", "# killProcess removed")
-    main_act_content = main_act_content.replace("invoke-virtual {p0}, Landroid/app/Activity;->finishAndRemoveTask()V", "# finishAndRemoveTask removed")
-    with open(main_act_path, "w", encoding="utf-8") as f:
-        f.write(main_act_content)
-    print("  [1] MainActivity.smali: Sentry kill-switch disabled & finish neutralized")
+for root, dirs, files in os.walk(decoded_dir):
+    for f in files:
+        if f == "MainActivity.smali":
+            main_act_path = os.path.join(root, f)
+            with open(main_act_path, "r", encoding="utf-8") as fp:
+                main_act_content = fp.read()
+            main_act_content = main_act_content.replace("if-nez v1, :cond_1", "goto :cond_1")
+            main_act_content = main_act_content.replace("invoke-static {p0}, Landroid/os/Process;->killProcess(I)V", "# killProcess removed")
+            main_act_content = main_act_content.replace("invoke-virtual {p0}, Landroid/app/Activity;->finishAndRemoveTask()V", "# finishAndRemoveTask removed")
+            with open(main_act_path, "w", encoding="utf-8") as fp:
+                fp.write(main_act_content)
+            print("  [1] MainActivity.smali: Sentry kill-switch disabled & finish neutralized")
+
+        if f in ["ClaudeApplication.smali", "HermesApplication.smali"]:
+            app_smali_path = os.path.join(root, f)
+            with open(app_smali_path, "r", encoding="utf-8") as fp:
+                app_content = fp.read()
+            # Ensure correct Koin initialization lambda index (case 13 / 0xd)
+            app_content = app_content.replace("const/16 v3, 0xf\n\n    invoke-direct {v0, v3, p0}, La2;-><init>(ILjava/lang/Object;)V",
+                                              "const/16 v3, 0xd\n\n    invoke-direct {v0, v3, p0}, La2;-><init>(ILjava/lang/Object;)V")
+            with open(app_smali_path, "w", encoding="utf-8") as fp:
+                fp.write(app_content)
+            print(f"  [1.1] {f}: Koin module initialization verified")
 
 yz4_path = os.path.join(decoded_dir, "smali_classes3", "yz4.smali")
 if os.path.exists(yz4_path):
