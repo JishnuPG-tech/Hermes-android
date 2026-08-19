@@ -202,7 +202,7 @@ if os.path.exists(net_sec_path):
 </network-security-config>""")
     print("  [7] Updated network_security_config.xml")
 
-# 8. Fix AndroidManifest.xml: Strip Split APK restrictions & Lower minSdkVersion
+# 8. Fix AndroidManifest.xml: Strip Split APK restrictions, extractNativeLibs=true, and unique authorities
 manifest_path = os.path.join(decoded_dir, "AndroidManifest.xml")
 if os.path.exists(manifest_path):
     with open(manifest_path, "r", encoding="utf-8") as f:
@@ -224,18 +224,39 @@ if os.path.exists(manifest_path):
     for p in split_metadata_patterns:
         content = re.sub(p, '', content)
 
-    # Change package name to com.hermes.agent so it never conflicts with Play Store Claude
+    # Change package name to com.hermes.agent
     content = re.sub(r'package="com\.anthropic\.claude"', 'package="com.hermes.agent"', content)
-    content = content.replace('com.anthropic.claude.firebaseinitprovider', 'com.hermes.agent.firebaseinitprovider')
-    content = content.replace('com.anthropic.claude.provider.datadog.rum', 'com.hermes.agent.provider.datadog.rum')
-    content = content.replace('com.anthropic.claude.SentryNdkPreloadProvider', 'com.hermes.agent.SentryNdkPreloadProvider')
+
+    # Enable native library extraction on installation
+    content = content.replace('android:extractNativeLibs="false"', 'android:extractNativeLibs="true"')
+
+    # Replace all provider authorities and permissions to prevent conflicts with original Claude
+    authorities_to_replace = [
+        'com.anthropic.claude.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION',
+        'com.anthropic.claude.firebaseinitprovider',
+        'com.anthropic.claude.provider.datadog.rum',
+        'com.anthropic.claude.SentryNdkPreloadProvider',
+        'com.anthropic.claude.provider',
+        'com.anthropic.claude.androidx-startup',
+        'com.anthropic.claude.mlkitinitprovider',
+        'com.anthropic.claude.resources.AndroidContextProvider',
+        'com.anthropic.claude.SentryInitProvider',
+        'com.anthropic.claude.SentryPerformanceProvider',
+        'com.anthropic.claude.provider.datadog.profiling',
+        'com.anthropic.claude.assist'
+    ]
+    for auth in authorities_to_replace:
+        content = content.replace(auth, auth.replace('com.anthropic.claude', 'com.hermes.agent'))
 
     # Lower minSdkVersion to 26 (Android 8.0+)
     content = re.sub(r'android:minSdkVersion="\d+"', 'android:minSdkVersion="26"', content)
 
+    # Remove duplicated permissions
+    content = re.sub(r'(<uses-permission android:name="android\.permission\.health\.READ_HEALTH_DATA_HISTORY"/>\s*){2,}', r'\1', content)
+
     with open(manifest_path, "w", encoding="utf-8") as f:
         f.write(content)
-    print("  [8] AndroidManifest converted to standalone package (com.hermes.agent, minSdk=26)")
+    print("  [8] AndroidManifest converted to standalone package (com.hermes.agent, extractNativeLibs=true, minSdk=26)")
 
 # 9. Lower minSdkVersion in apktool.yml
 apktool_yml = os.path.join(decoded_dir, "apktool.yml")
