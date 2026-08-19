@@ -1,11 +1,39 @@
 import os
 import re
+import urllib.request
+import zipfile
+import io
 from PIL import Image
 
 decoded_dir = "claude_decoded"
 source_icon = "hermes_icon_source.png"
 
 print("[*] Starting Hermes Comprehensive Patcher...")
+
+# 0. Download Missing Native Libraries (Split APK Reconstruction)
+print("  [*] Fetching essential native libraries (.so) into APK...")
+native_urls = [
+    ('sqlite-bundled', 'https://dl.google.com/dl/android/maven2/androidx/sqlite/sqlite-bundled-android/2.6.2/sqlite-bundled-android-2.6.2.aar'),
+    ('graphics-path', 'https://dl.google.com/dl/android/maven2/androidx/graphics/graphics-path/1.0.1/graphics-path-1.0.1.aar'),
+    ('sentry-ndk', 'https://repo1.maven.org/maven2/io/sentry/sentry-android-ndk/7.14.0/sentry-android-ndk-7.14.0.aar'),
+]
+
+for name, url in native_urls:
+    try:
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req) as resp:
+            data = resp.read()
+        z = zipfile.ZipFile(io.BytesIO(data))
+        for f in z.namelist():
+            if f.startswith('jni/') and f.endswith('.so'):
+                rel = f.replace('jni/', 'lib/')
+                dest = os.path.join(decoded_dir, rel.replace('/', os.sep))
+                os.makedirs(os.path.dirname(dest), exist_ok=True)
+                with open(dest, 'wb') as out_fp:
+                    out_fp.write(z.read(f))
+        print(f"  [+] Extracted native binaries for: {name}")
+    except Exception as e:
+        print(f"  [!] Note fetching {name}: {e}")
 
 # 1. Disable all process kill-switches in MainActivity.smali & yz4.smali
 main_act_path = os.path.join(decoded_dir, "smali", "com", "anthropic", "claude", "mainactivity", "MainActivity.smali")
