@@ -56,9 +56,14 @@ for root, dirs, files in os.walk(decoded_dir):
             # Ensure correct Koin initialization lambda index (case 13 / 0xd)
             app_content = app_content.replace("const/16 v3, 0xf\n\n    invoke-direct {v0, v3, p0}, La2;-><init>(ILjava/lang/Object;)V",
                                               "const/16 v3, 0xd\n\n    invoke-direct {v0, v3, p0}, La2;-><init>(ILjava/lang/Object;)V")
+            # Remove main-thread runBlocking freeze
+            old_blocking = "    new-instance v3, Lsk;\n\n    const/16 v7, 0xb\n\n    invoke-direct {v3, v0, v6, v7}, Lsk;-><init>(Ljava/lang/Object;Le85;I)V\n\n    invoke-static {v3}, Lxwf;->Z(Lbb8;)Ljava/lang/Object;"
+            app_content = app_content.replace(old_blocking, "    # Synchronous runBlocking delay removed")
+            # Fix early-return bug on WebView feature check
+            app_content = app_content.replace("if-nez v0, :cond_c", "if-nez v0, :goto_8")
             with open(app_smali_path, "w", encoding="utf-8") as fp:
                 fp.write(app_content)
-            print(f"  [1.1] {f}: Koin module initialization verified")
+            print(f"  [1.1] {f}: Koin module initialization verified & main-thread ANR neutralized")
 
 yz4_path = os.path.join(decoded_dir, "smali_classes3", "yz4.smali")
 if os.path.exists(yz4_path):
