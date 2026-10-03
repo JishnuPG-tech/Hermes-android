@@ -159,7 +159,7 @@ old_endpoints = [
     "https://claude.ai",
     "https://claude-ai.staging.ant.dev"
 ]
-new_endpoint = "https://jishnupg-opencode-cli.hf.space/hermes/v1"
+new_endpoint = "https://jishnupg-hermes.hf.space/hermes/v1"
 
 patched_smali = 0
 for root, dirs, files in os.walk(decoded_dir):
